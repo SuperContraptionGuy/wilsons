@@ -568,6 +568,7 @@ void testMazeOperations(rendererProps* renderer)
 
 void randomStep(maze_t* maze)
 {
+
 }
 
 int main(int argc, char** argv)
