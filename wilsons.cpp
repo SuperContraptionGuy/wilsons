@@ -453,6 +453,7 @@ linked_node* getNthAfter(linked_node* node, size_t n)
     {
         node = node->next;
     }
+    // n is underflow after loop if it started at 0, fyi
 
     return node;    // returns null if there aren't n nodes
 }
@@ -469,13 +470,23 @@ void testLinkedLists()
     if(     !(list.beginning == &node &&
                     list.end == &node &&
                  list.length == 1 &&
-        node.listAffiliation == list.listName) &&
+        node.listAffiliation == list.listName &&
                node.previous == NULL &&
-                   node.next == NULL )
-        printf("pushNodeBack() failed it's test. for shame...\n");
-    linked_node node2 = {0};
+                   node.next == NULL ))
+        printf("pushNodeBack() failed it's test for an empty list. for shame...\n");
     // not empty?
-
+    linked_node node2 = {0};
+    pushNodeBack(&list, &node2);
+    if(!( list.beginning        ==  &node           &&
+          list.end              ==  &node2          &&
+          list.length           ==  2               &&
+          node.previous         ==  NULL            &&
+          node.next             ==  &node2          &&
+          node.listAffiliation  ==  list.listName   &&
+          node2.previous        ==  &node           &&
+          node2.next            ==  NULL            &&
+          node2.listAffiliation ==  list.listName   ))
+        printf("pushNodeBack() failed it's test for not empty list.\n");
 
 
     //  only?
