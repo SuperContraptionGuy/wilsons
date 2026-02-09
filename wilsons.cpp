@@ -445,7 +445,7 @@ void removeNode(doubly_linked_list* list, linked_node* node)
 linked_node* getNthAfter(linked_node* node, unsigned int n)
 {
     linked_node* nextNode = node;
-    //for(size_t i = 0; (i <= n) && ((nextNode = nextNode->next) != NULL); i++)
+    //for(size_t i = 0; (i < n) && ((nextNode = nextNode->next) != NULL); i++);
     //for(size_t i = 0; i <= n; i++)
     size_t i = 0;
     while((i < n) && (nextNode != NULL))
@@ -455,6 +455,18 @@ linked_node* getNthAfter(linked_node* node, unsigned int n)
     }
 
     return nextNode;    // returns null if there aren't n nodes
+}
+
+void testLinkedLists()
+{
+    doubly_linked_list list = {0};
+
+    // test pushNodeBack
+    //  empty?
+    //  only?
+    //  First?
+    //  Last?
+    //  somewhere in the middle
 }
 
 typedef struct
