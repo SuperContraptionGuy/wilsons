@@ -1,1 +1,1 @@
-gcc -g -lm -o wilsons wilsons.cpp
+gcc -g -lm -o wilsons wilsons.c
