@@ -444,23 +444,15 @@ void removeNode(doubly_linked_list* list, linked_node* node)
 
 linked_node* getNthAfter(linked_node* node, unsigned int n)
 {
-    //linked_node* lastNode = node;
     linked_node* nextNode = node;
-    for(size_t i = 0; (i <= n) && ((nextNode = nextNode->next) != NULL); i++)
+    //for(size_t i = 0; (i <= n) && ((nextNode = nextNode->next) != NULL); i++)
     //for(size_t i = 0; i <= n; i++)
-    {
-        //nextNode = nextNode->next;
-    }
-    
-    /*
     size_t i = 0;
-
-    while ((i <= n) && (nextNode != NULL))
+    while((i < n) && (nextNode != NULL))
     {
         nextNode = nextNode->next;
-        i += 1;
+        i++;
     }
-    */
 
     return nextNode;    // returns null if there aren't n nodes
 }
