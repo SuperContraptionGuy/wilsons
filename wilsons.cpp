@@ -442,58 +442,143 @@ void removeNode(doubly_linked_list* list, linked_node* node)
     }
 }
 
-linked_node* getNthAfter(linked_node* node, size_t n)
+linked_node* getNthFrom(linked_node* node, int n)
 {
-    //linked_node* nextNode = node;
-    //for(size_t i = 0; (i < n) && ((nextNode = nextNode->next) != NULL); i++);
-    //for(size_t i = 0; i <= n; i++)
-    //size_t i = 0;
-    //while((n--) && (node != NULL))
-    while(n-- && (node != NULL))
+    int direction = n>0 ? 1 : -1;
+    while(n && (node != NULL))
     {
-        node = node->next;
+        if(direction > 0)
+            node = node->next;
+        else
+            node = node->previous;
+        n -= direction;
     }
-    // n is underflow after loop if it started at 0, fyi
 
-    return node;    // returns null if there aren't n nodes
+    return node;    // returns null if there aren't n nodes from node
 }
 
 void testLinkedLists()
 {
     printf("Begin TESTING.\n");
-    doubly_linked_list list = {0};
-    list.listName = UNUSED;
 
-    // test pushNodeBack
-    //  empty?
-    linked_node node = {0};
-    pushNodeBack(&list, &node);
-    if(     !(list.beginning == &node &&
-                    list.end == &node &&
-                 list.length == 1 &&
-        node.listAffiliation == list.listName &&
-               node.previous == NULL &&
-                   node.next == NULL ))
-        printf("pushNodeBack() failed it's test for an empty list. for shame...\n");
-    // not empty?
-    linked_node node2 = {0};
-    pushNodeBack(&list, &node2);
-    if(!( list.beginning        ==  &node           &&
-          list.end              ==  &node2          &&
-          list.length           ==  2               &&
-          node.previous         ==  NULL            &&
-          node.next             ==  &node2          &&
-          node.listAffiliation  ==  list.listName   &&
-          node2.previous        ==  &node           &&
-          node2.next            ==  NULL            &&
-          node2.listAffiliation ==  list.listName   ))
-        printf("pushNodeBack() failed it's test for not empty list.\n");
+    {
+        doubly_linked_list list = {0};
+        list.listName = UNUSED;
+
+        // test pushNodeBack
+        //  empty?
+        linked_node node = {0};
+        pushNodeBack(&list, &node);
+        if( !(  list.beginning          ==  &node           &&
+                list.end                ==  &node           &&
+                list.length             ==  1               &&
+                node.listAffiliation    ==  list.listName   &&
+                node.previous           ==  NULL            &&
+                node.next               ==  NULL            ))
+            printf("pushNodeBack() failed it's test for an empty list. for shame...\n");
+        // not empty?
+        linked_node node2 = {0};
+        pushNodeBack(&list, &node2);
+        if(!( list.beginning        ==  &node           &&
+              list.end              ==  &node2          &&
+              list.length           ==  2               &&
+              node.previous         ==  NULL            &&
+              node.next             ==  &node2          &&
+              node.listAffiliation  ==  list.listName   &&
+              node2.previous        ==  &node           &&
+              node2.next            ==  NULL            &&
+              node2.listAffiliation ==  list.listName   ))
+            printf("pushNodeBack() failed it's test for not empty list.\n");
+    }
 
 
-    //  only?
-    //  First?
-    //  Last?
-    //  somewhere in the middle
+    {
+        doubly_linked_list list = {0};
+        linked_node* node_pointer;
+        linked_node* node_pointer2;
+        list.listName = UNUSED;
+        //  empty
+        for(int n = 0; n < 10; n++)
+        {
+            node_pointer = getNthFrom(NULL, n);
+            if( !(  node_pointer == NULL   ))
+                printf("getNthFrom() failed empty check\n");
+        }
+
+        //  only?
+        linked_node node = {0};
+        pushNodeBack(&list, &node);
+        for(int n = -10; n < 10; n++)
+        {
+            node_pointer = getNthFrom(&node, n);
+            if(n == 0)
+            {
+                if( !(  node_pointer    ==  &node  ))
+                    printf("getNthFrom() failed only check n == 0\n");
+            }
+            else 
+            {
+                if( !(  node_pointer    ==  NULL    ))
+                    printf("getNthFrom() failed only check n!=0\n");
+            }
+        }
+
+        //  First or last?
+        linked_node node2 = {0};
+        pushNodeBack(&list, &node2);
+        for(int n = -10; n < 10; n++)
+        {
+            node_pointer = getNthFrom(&node, n);
+            node_pointer2 = getNthFrom(&node2, n);
+            if(n == -1)
+            {
+                if( !(  node_pointer   ==  NULL   &&
+                        node_pointer2   ==  &node  ))
+                    printf("getNthFrom() failed first/last check n==-1\n");
+            } else if(n == 0)
+            {
+                if( !(  node_pointer   ==  &node   &&
+                        node_pointer2   ==  &node2  ))
+                    printf("getNthFrom() failed first/last check n==0\n");
+            } else if(n == 1)
+            {
+                if( !(  node_pointer   ==  &node2  &&
+                        node_pointer2   ==  NULL    ))
+                    printf("getNthFrom() failed first/last check n==1\n");
+            } else
+            {
+                if( !(  node_pointer   ==  NULL    &&
+                        node_pointer2   ==  NULL    ))
+                    printf("getNthFrom() failed first/last check n is other\n");
+            }
+        }
+
+        //  somewhere in the middle
+        linked_node node3 = {0};
+        pushNodeBack(&list, &node3);
+        for(int n = -10; n < 10; n++)
+        {
+            node_pointer = getNthFrom(&node2, n);
+            if(n == -1)
+            {
+                if( !(  node_pointer    ==  &node   ))
+                    printf("getNthFrom() failed middle check n==-1\n");
+            } else if(n == 0)
+            {
+                if( !(  node_pointer    ==  &node2   ))
+                    printf("getNthFrom() failed middle check n==0\n");
+            } else if(n == 1)
+            {
+                if( !(  node_pointer    ==  &node3   ))
+                    printf("getNthFrom() failed middle check n==1\n");
+            } else
+            {
+                if( !(  node_pointer    ==  NULL   ))
+                    printf("getNthFrom() failed middle check n is other\n");
+            }
+        }
+    }
+
     printf("END TESTING.\n");
 }
 
@@ -552,7 +637,7 @@ void initializeMaze(maze_t* maze, size_t x, size_t y)
     long int nodeIndex;
     lrand48_r(&maze->PRNG, &nodeIndex);
     nodeIndex = nodeIndex % maze->unused.length;
-    linked_node* node = getNthAfter(maze->unused.beginning, nodeIndex);
+    linked_node* node = getNthFrom(maze->unused.beginning, nodeIndex);
 
     removeNode(&maze->unused, node);
     pushNodeFront(&maze->unused, node);
