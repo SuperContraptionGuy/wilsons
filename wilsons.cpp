@@ -442,27 +442,42 @@ void removeNode(doubly_linked_list* list, linked_node* node)
     }
 }
 
-linked_node* getNthAfter(linked_node* node, unsigned int n)
+linked_node* getNthAfter(linked_node* node, size_t n)
 {
-    linked_node* nextNode = node;
+    //linked_node* nextNode = node;
     //for(size_t i = 0; (i < n) && ((nextNode = nextNode->next) != NULL); i++);
     //for(size_t i = 0; i <= n; i++)
-    size_t i = 0;
-    while((i < n) && (nextNode != NULL))
+    //size_t i = 0;
+    //while((n--) && (node != NULL))
+    while(n-- && (node != NULL))
     {
-        nextNode = nextNode->next;
-        i++;
+        node = node->next;
     }
 
-    return nextNode;    // returns null if there aren't n nodes
+    return node;    // returns null if there aren't n nodes
 }
 
 void testLinkedLists()
 {
     doubly_linked_list list = {0};
+    list.listName = UNUSED;
 
     // test pushNodeBack
     //  empty?
+    linked_node node = {0};
+    pushNodeBack(&list, &node);
+    if(     !(list.beginning == &node &&
+                    list.end == &node &&
+                 list.length == 1 &&
+        node.listAffiliation == list.listName) &&
+               node.previous == NULL &&
+                   node.next == NULL )
+        printf("pushNodeBack() failed it's test. for shame...\n");
+    linked_node node2 = {0};
+    // not empty?
+
+
+
     //  only?
     //  First?
     //  Last?
