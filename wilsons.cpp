@@ -306,6 +306,7 @@ typedef struct linked_node
 typedef struct
 {
     linked_node* root;      // root of acyclic graph (tree)
+    list_affiliation_t listName;
 } linked_acyclic_graph;
 
 typedef struct
@@ -314,6 +315,8 @@ typedef struct
     linked_node* end;
 
     size_t length;
+    list_affiliation_t listName;
+
 } doubly_linked_list;
 
 void pushNodeBack(doubly_linked_list* list, linked_node* node)
@@ -335,6 +338,7 @@ void pushNodeBack(doubly_linked_list* list, linked_node* node)
     }
 
     list->length++;
+    node->listAffiliation = list->listName;
 }
 
 void pushNodeFront(doubly_linked_list*list, linked_node* node)
@@ -354,6 +358,7 @@ void pushNodeFront(doubly_linked_list*list, linked_node* node)
     }
 
     list->length++;
+    node->listAffiliation = list->listName;
 }
 
 linked_node* popNodeBack(doubly_linked_list* list)
@@ -396,6 +401,7 @@ void addNodeBefore(doubly_linked_list* list, linked_node* next, linked_node* nod
     next->previous = node;
 
     list->length++;
+    node->listAffiliation = list->listName;
 }
 
 void addNodeAfter(doubly_linked_list* list, linked_node* previous, linked_node* node)
@@ -406,10 +412,16 @@ void addNodeAfter(doubly_linked_list* list, linked_node* previous, linked_node* 
     previous->next = node;
 
     list->length++;
+    node->listAffiliation = list->listName;
 }
 
 void removeNode(doubly_linked_list* list, linked_node* node)
 {
+    if(!node)
+    {
+        printf("null pointer at remove node... grr...\n");
+        return;
+    }
     if(!node->next)
     {
         // it's the last item
@@ -430,6 +442,29 @@ void removeNode(doubly_linked_list* list, linked_node* node)
     }
 }
 
+linked_node* getNthAfter(linked_node* node, unsigned int n)
+{
+    //linked_node* lastNode = node;
+    linked_node* nextNode = node;
+    for(size_t i = 0; (i <= n) && ((nextNode = nextNode->next) != NULL); i++)
+    //for(size_t i = 0; i <= n; i++)
+    {
+        //nextNode = nextNode->next;
+    }
+    
+    /*
+    size_t i = 0;
+
+    while ((i <= n) && (nextNode != NULL))
+    {
+        nextNode = nextNode->next;
+        i += 1;
+    }
+    */
+
+    return nextNode;    // returns null if there aren't n nodes
+}
+
 typedef struct
 {
     linked_node* nodes;     // node pool array
@@ -440,6 +475,8 @@ typedef struct
 
     vec2 size;
     size_t numberOfNodes;
+
+    drand48_data PRNG;
 } maze_t;
 
 void initializeMaze(maze_t* maze, size_t x, size_t y)
@@ -447,6 +484,10 @@ void initializeMaze(maze_t* maze, size_t x, size_t y)
     maze->size.x = x;
     maze->size.y = y;
     maze->numberOfNodes = x * y;
+
+    maze->unused.listName = UNUSED;
+    maze->randomWalk.listName = RANDOMWALK;
+    maze->mazeIncluded.listName = TREE;
 
     // generate the pool of nodes
     maze->nodes = (linked_node*)malloc(maze->numberOfNodes * sizeof(linked_node));
@@ -471,7 +512,18 @@ void initializeMaze(maze_t* maze, size_t x, size_t y)
         }
     }
 
+    // setup prng
+    srand(1);
+    srand48_r(rand(), &maze->PRNG);
+
     // choose a random cell to be initially included in the maze
+    long int nodeIndex;
+    lrand48_r(&maze->PRNG, &nodeIndex);
+    nodeIndex = nodeIndex % maze->unused.length;
+    linked_node* node = getNthAfter(maze->unused.beginning, nodeIndex);
+
+    removeNode(&maze->unused, node);
+    pushNodeFront(&maze->unused, node);
 }
 
 void destroyMaze(maze_t* maze)
