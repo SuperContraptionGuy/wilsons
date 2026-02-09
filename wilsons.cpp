@@ -460,6 +460,7 @@ linked_node* getNthAfter(linked_node* node, size_t n)
 
 void testLinkedLists()
 {
+    printf("Begin TESTING.\n");
     doubly_linked_list list = {0};
     list.listName = UNUSED;
 
@@ -493,6 +494,7 @@ void testLinkedLists()
     //  First?
     //  Last?
     //  somewhere in the middle
+    printf("END TESTING.\n");
 }
 
 typedef struct
@@ -662,14 +664,15 @@ int main(int argc, char** argv)
     }
 
     rendererProps renderer;
-    initializeRenderer(&renderer, 100, 100, 60, argv[1]);
+    //initializeRenderer(&renderer, 100, 100, 60, argv[1]);
 
     //testRender(&renderer);
     //testFrameRender(&renderer);
     //testDraws(&renderer);
-    testMazeOperations(&renderer);
+    testLinkedLists();
+    //testMazeOperations(&renderer);
 
-    destroyRenderer(&renderer);
+    //destroyRenderer(&renderer);
 
     return 0;
 }
