@@ -326,6 +326,9 @@ bool isDescendantOf(linked_node* node, linked_node* root)
 
 void addChild(linked_node* parent, linked_node* child)
 {
+    // check that we're not making a cyclic graph
+    if(isDescendantOf(parent, child))
+        return; // refuse to make a cyclic graph
     parent->children[parent->numberOfChildren] = child;
     parent->numberOfChildren++;
     child->parent = parent;
