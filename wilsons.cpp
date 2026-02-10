@@ -56,7 +56,7 @@ void initializeRenderer(rendererProps* renderer, int x, int y, int fps, char* fi
     renderer->frameBuffer.pixels = (rgb24*)malloc(renderer->frameBuffer.numberOfBytes);
 
     char ffmpegCommand[500] = {0};
-    char ffmpegFormatString[] = "ffmpeg -s %ix%i -f rawvideo -pix_fmt rgb24 -r %i -i pipe:0 -pix_fmt yuv420p -profile:v high -level:v 4.1 -crf:v 20 \"%s.mp4\"";
+    char ffmpegFormatString[] = "ffmpeg -hide_banner -loglevel error -s %ix%i -f rawvideo -pix_fmt rgb24 -r %i -i pipe:0 -pix_fmt yuv420p -profile:v high -level:v 4.1 -crf:v 20 \"%s.mp4\"";
     //char ffmpegFormatString[] = "tee log | ffmpeg -s %ix%i -f rawvideo -pix_fmt rgb24 -r %i -i pipe:0 -pix_fmt yuv420p -profile:v high -level:v 4.1 -crf:v 20 \"%s.mp4\"";
     snprintf(ffmpegCommand, 500, ffmpegFormatString, renderer->screenSize.x, renderer->screenSize.y, fps, filename);
     renderer->ffmpegStdIn = popen(ffmpegCommand, "w");
@@ -329,6 +329,8 @@ void addChild(linked_node* parent, linked_node* child)
     // check that we're not making a cyclic graph
     if(isDescendantOf(parent, child))
         return; // refuse to make a cyclic graph
+    if(parent->numberOfChildren >= 4)
+        return; // refuse to add too many children, breaks shit
     parent->children[parent->numberOfChildren] = child;
     parent->numberOfChildren++;
     child->parent = parent;
@@ -395,7 +397,8 @@ linked_node* popNodeBack(doubly_linked_list* list)
         return NULL;
     linked_node* node = list->end;
     list->end = list->end->previous;    // handles case where there was only one node, since previous would be null in that case
-    list->end->next = NULL;
+    if(list->end)   // check if it's fucking null lmao
+        list->end->next = NULL;
     if(list->end == NULL)
         list->beginning = NULL; // set beginning if the list is now empty
 
@@ -482,6 +485,53 @@ linked_node* getNthFrom(linked_node* node, int n)
     }
 
     return node;    // returns null if there aren't n nodes from node
+}
+
+// move the rest of a linked list from one list to another
+void moveRestToEnd(doubly_linked_list* listFrom, doubly_linked_list* listTo, linked_node* start)
+{
+    if(!start->previous)
+        // this was the only node in the from list, it's now empty if we move it. I just wanna refuse I think
+        return;
+
+    listFrom->end = start->previous;
+    listFrom->end->next = NULL;
+
+    start->previous = listTo->end;
+    listTo->end->next = start;
+
+    linked_node* next = start;
+    for(;;)
+    {
+        // change list affiliations
+        next->listAffiliation = listTo->listName;
+        listFrom->length--;
+        listTo->length++;
+
+        if(!next->next)
+            break;
+        next = next->next;
+    }
+    listTo->end = next;
+}
+
+void convertListToBranchInReverseRootedAt(doubly_linked_list* listFrom, linked_node* root, linked_node* branch)
+{
+    linked_node* nextNode;
+    for(;;)
+    {
+        removeNode(listFrom, branch);
+        addChild(root, branch);
+        if(!branch->previous)
+            break;
+        nextNode = branch->previous;
+        root = branch;
+        branch = nextNode;
+    }
+    listFrom->beginning = NULL;
+    listFrom->end = NULL;
+    // add the first node as a child of the rooting node
+    // traverse list in reverse, making each subsequent node a child of the last
 }
 
 void testLinkedLists()
@@ -623,6 +673,18 @@ typedef struct
     drand48_data PRNG;
 } maze_t;
 
+linked_node* getRandomUnusedCell(maze_t* maze)
+{
+    if(maze->unused.length == 0)
+    {
+        return NULL;
+    }
+    long int nodeIndex;
+    lrand48_r(&maze->PRNG, &nodeIndex);
+    nodeIndex = nodeIndex % maze->unused.length;
+    return getNthFrom(maze->unused.beginning, nodeIndex);
+}
+
 void initializeMaze(maze_t* maze, size_t x, size_t y)
 {
     maze->size.x = x;
@@ -657,22 +719,17 @@ void initializeMaze(maze_t* maze, size_t x, size_t y)
     }
 
     // setup prng
-    srand(2);
+    srand(4);
     srand48_r(rand(), &maze->PRNG);
 
     // choose a random cell to be initially included in the maze
-    long int nodeIndex;
-    lrand48_r(&maze->PRNG, &nodeIndex);
-    nodeIndex = nodeIndex % maze->unused.length;
-    linked_node* node = getNthFrom(maze->unused.beginning, nodeIndex);
+    linked_node* node = getRandomUnusedCell(maze);
     removeNode(&maze->unused, node);
     maze->mazeIncluded.root = node;
     node->listAffiliation = TREE;
 
     // choose a random cell to begin random walk from
-    lrand48_r(&maze->PRNG, &nodeIndex);
-    nodeIndex = nodeIndex % maze->unused.length;
-    node = getNthFrom(maze->unused.beginning, nodeIndex);
+    node = getRandomUnusedCell(maze);
     removeNode(&maze->unused, node);
     pushNodeFront(&maze->randomWalk, node);
 }
@@ -736,10 +793,17 @@ void renderTree(rendererProps* renderer, maze_renderer* mazeRenderer, linked_nod
     drawBox(renderer, pos, vec2{mazeRenderer->cellSize, mazeRenderer->cellSize}, cellColor);
     if(root->parent)
     {
+        // eliminates the wall between cells
+        drawBox(renderer,
+                add(scale(add(root->position, root->parent->position), mazeRenderer->cellGridSize / 2), mazeRenderer->cellGridOffset),
+                vec2{mazeRenderer->cellSize, mazeRenderer->cellSize}, cellColor);
+        // draws a relation line
+        /*
         drawLine(renderer,
                 add(scale(root->position, mazeRenderer->cellGridSize), mazeRenderer->cellGridOffset + mazeRenderer->cellSize / 2),
                 add(scale(root->parent->position, mazeRenderer->cellGridSize), mazeRenderer->cellGridOffset + mazeRenderer->cellSize / 2),
                 lineColor);
+                */
     }
     linked_node* child;
     for(int i = 0; i < root->numberOfChildren; i++)
@@ -759,7 +823,8 @@ void renderMaze(rendererProps* renderer, maze_t* maze)
     renderTree(renderer, &mazeRenderer, maze->mazeIncluded.root, rgb24{255, 255, 255}, rgb24{0, 255, 0});
 }
 
-void randomStep(maze_t* maze)
+// returns true when maze is done
+bool randomStep(maze_t* maze)
 {
     // find random neighbor to end of random walk
 
@@ -787,14 +852,56 @@ void randomStep(maze_t* maze)
 
     // add that node to the random walk
     if(nextNode->listAffiliation == UNUSED)
+    {
         removeNode(&maze->unused, nextNode);
+        pushNodeBack(&maze->randomWalk, nextNode);
+    }
     else if(nextNode->listAffiliation == TREE)
-        return; // supposed to append the random walk to the tree as a branch rooted at the collision
+    {
+        convertListToBranchInReverseRootedAt(&maze->randomWalk, nextNode, maze->randomWalk.end);
+        // repopulate the randomwalk list with a new random node
+        linked_node* node = getRandomUnusedCell(maze);
+        if(!node)
+            // node might be null....? what happens when all unused cells are gone
+            // maze is done of course
+            return true;
+        removeNode(&maze->unused, node);
+        pushNodeBack(&maze->randomWalk, node);
+        //return true;
+        // otherwise, the maze is done
+        //return false; // supposed to append the random walk to the tree as a branch rooted at the collision
+    }
     else if(nextNode->listAffiliation == RANDOMWALK)
-        return; // supposed to execute a loop erasure
-        //removeNode(&maze->randomWalk, nextNode);
+    {
+        // perform loop erasure
+        // take the rest of the random walk list and move it to the unused list
+        if(nextNode->next)  // be sure I'm not at the end of the walk (ie wall collision)
+            moveRestToEnd(&maze->randomWalk, &maze->unused, nextNode->next);
+    }
+    return false;
+}
 
-    pushNodeBack(&maze->randomWalk, nextNode);
+// execute the algorithm
+void wilsonsAlgo(rendererProps* renderer)
+{
+    maze_t maze = {0};
+    initializeMaze(&maze, 15, 15);
+
+    printf("%i\n", (int)maze.unused.length);
+    drawFill(renderer, rgb24{0, 0, 0});
+    renderMaze(renderer, &maze);
+    writeFrame(renderer);
+
+    //for(int i = 0; i < 1000; i++)
+    for(;;)
+    {
+        if(randomStep(&maze))
+            break;
+
+        drawFill(renderer, rgb24{0, 0, 0});
+        renderMaze(renderer, &maze);
+        writeFrame(renderer);
+    }
 }
 
 void testMazeOperations(rendererProps* renderer)
@@ -806,15 +913,6 @@ void testMazeOperations(rendererProps* renderer)
     drawFill(renderer, rgb24{0, 0, 0});
     renderMaze(renderer, &maze);
     writeFrame(renderer);
-
-    for(int i = 0; i < 1000; i++)
-    {
-        randomStep(&maze);
-
-        drawFill(renderer, rgb24{0, 0, 0});
-        renderMaze(renderer, &maze);
-        writeFrame(renderer);
-    }
 
     linked_node* node = popNodeFront(&maze.unused);
     linked_node* node2 = popNodeFront(&maze.unused);
@@ -886,7 +984,8 @@ int main(int argc, char** argv)
     //testFrameRender(&renderer);
     //testDraws(&renderer);
     //testLinkedLists();
-    testMazeOperations(&renderer);
+    //testMazeOperations(&renderer);
+    wilsonsAlgo(&renderer);
 
     destroyRenderer(&renderer);
 
