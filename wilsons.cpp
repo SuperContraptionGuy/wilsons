@@ -781,17 +781,18 @@ void randomStep(maze_t* maze)
     // find node step away from random walk end
     vec2* endCoords = &maze->randomWalk.end->position;
     vec2 nextCoords = {endCoords->x + step.x, endCoords->y + step.y};
-    nextCoords.x = nextCoords.x < 0 ? 0 : nextCoords.x > maze->size.x ? maze->size.x : nextCoords.x;
-    nextCoords.y = nextCoords.y < 0 ? 0 : nextCoords.y > maze->size.y ? maze->size.y : nextCoords.y;
+    nextCoords.x = nextCoords.x < 0 ? 0 : nextCoords.x >= maze->size.x ? maze->size.x-1 : nextCoords.x;
+    nextCoords.y = nextCoords.y < 0 ? 0 : nextCoords.y >= maze->size.y ? maze->size.y-1 : nextCoords.y;
     linked_node* nextNode= maze->map[nextCoords.x][nextCoords.y];
 
     // add that node to the random walk
     if(nextNode->listAffiliation == UNUSED)
         removeNode(&maze->unused, nextNode);
     else if(nextNode->listAffiliation == TREE)
-        return; // don't do shit with em
+        return; // supposed to append the random walk to the tree as a branch rooted at the collision
     else if(nextNode->listAffiliation == RANDOMWALK)
-        removeNode(&maze->randomWalk, nextNode);
+        return; // supposed to execute a loop erasure
+        //removeNode(&maze->randomWalk, nextNode);
 
     pushNodeBack(&maze->randomWalk, nextNode);
 }
@@ -799,14 +800,14 @@ void randomStep(maze_t* maze)
 void testMazeOperations(rendererProps* renderer)
 {
     maze_t maze = {0};
-    initializeMaze(&maze, 7, 7);
+    initializeMaze(&maze, 21, 20);
 
     printf("%i\n", (int)maze.unused.length);
     drawFill(renderer, rgb24{0, 0, 0});
     renderMaze(renderer, &maze);
     writeFrame(renderer);
 
-    for(int i = 0; i < 100; i++)
+    for(int i = 0; i < 1000; i++)
     {
         randomStep(&maze);
 
@@ -879,7 +880,7 @@ int main(int argc, char** argv)
     }
 
     rendererProps renderer;
-    initializeRenderer(&renderer, 100, 100, 60, argv[1]);
+    initializeRenderer(&renderer, 300, 300, 60, argv[1]);
 
     //testRender(&renderer);
     //testFrameRender(&renderer);
