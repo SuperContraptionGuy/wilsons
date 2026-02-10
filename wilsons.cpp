@@ -56,7 +56,7 @@ void initializeRenderer(rendererProps* renderer, int x, int y, int fps, char* fi
     renderer->frameBuffer.pixels = (rgb24*)malloc(renderer->frameBuffer.numberOfBytes);
 
     char ffmpegCommand[500] = {0};
-    char ffmpegFormatString[] = "ffmpeg -hide_banner -loglevel error -s %ix%i -f rawvideo -pix_fmt rgb24 -r %i -i pipe:0 -pix_fmt yuv420p -profile:v high -level:v 4.1 -crf:v 20 \"%s.mp4\"";
+    char ffmpegFormatString[] = "ffmpeg -hide_banner -loglevel error -s %ix%i -f rawvideo -pix_fmt rgb24 -r %i -i pipe:0 -f nut pipe:1 | tee $(ffmpeg -f nut -i pipe:0 -pix_fmt yuv420p -profile:v high -level:v 4.1 -crf:v 20 \"%s.mp4\") | ffplay -f nut -i pipe:0";
     //char ffmpegFormatString[] = "tee log | ffmpeg -s %ix%i -f rawvideo -pix_fmt rgb24 -r %i -i pipe:0 -pix_fmt yuv420p -profile:v high -level:v 4.1 -crf:v 20 \"%s.mp4\"";
     snprintf(ffmpegCommand, 500, ffmpegFormatString, renderer->screenSize.x, renderer->screenSize.y, fps, filename);
     renderer->ffmpegStdIn = popen(ffmpegCommand, "w");
@@ -151,23 +151,23 @@ void restrictBounds(rendererProps* renderer, vec2* vector)
 {
     if(vector->x < 0)
         vector->x = 0;
-    if(vector->x > renderer->screenSize.x)
-        vector->x = renderer->screenSize.x;
+    if(vector->x >= renderer->screenSize.x)
+        vector->x = renderer->screenSize.x - 1;
     if(vector->y < 0)
         vector->y = 0;
-    if(vector->y > renderer->screenSize.y)
-        vector->y = renderer->screenSize.y;
+    if(vector->y >= renderer->screenSize.y)
+        vector->y = renderer->screenSize.y - 1;
 }
 
 int checkBounds(rendererProps* renderer, vec2 vector)
 {
     if(vector.x < 0)
         return 0;
-    if(vector.x > renderer->screenSize.x)
+    if(vector.x >= renderer->screenSize.x)
         return 0;
     if(vector.y < 0)
         return 0;
-    if(vector.y > renderer->screenSize.y)
+    if(vector.y >= renderer->screenSize.y)
         return 0;
 
     return 1;
@@ -413,7 +413,8 @@ linked_node* popNodeFront(doubly_linked_list* list)
         return NULL;
     linked_node* node = list->beginning;
     list->beginning = list->beginning->next;
-    list->beginning->previous = NULL;
+    if(list->beginning)
+        list->beginning->previous = NULL;
     if(list->beginning == NULL)
         list->end = NULL;
 
@@ -813,14 +814,12 @@ void renderTree(rendererProps* renderer, maze_renderer* mazeRenderer, linked_nod
     }
 }
 
-void renderMaze(rendererProps* renderer, maze_t* maze)
+void renderMaze(rendererProps* renderer, maze_renderer* mazeRenderer, maze_t* maze)
 {
-    maze_renderer mazeRenderer = {10, 2, 0};
-    mazeRenderer.cellGridSize = mazeRenderer.cellSize + mazeRenderer.cellGridOffset * 2;
 
-    renderLinkedList(renderer, &mazeRenderer, &maze->unused, rgb24{50, 50, 50}, rgb24{50, 0, 0});
-    renderLinkedList(renderer, &mazeRenderer, &maze->randomWalk, rgb24{30, 30, 200}, rgb24{230, 230, 230});
-    renderTree(renderer, &mazeRenderer, maze->mazeIncluded.root, rgb24{255, 255, 255}, rgb24{0, 255, 0});
+    renderLinkedList(renderer, mazeRenderer, &maze->unused, rgb24{50, 50, 50}, rgb24{50, 0, 0});
+    renderLinkedList(renderer, mazeRenderer, &maze->randomWalk, rgb24{30, 30, 200}, rgb24{230, 230, 230});
+    renderTree(renderer, mazeRenderer, maze->mazeIncluded.root, rgb24{255, 255, 255}, rgb24{0, 255, 0});
 }
 
 // returns true when maze is done
@@ -882,14 +881,15 @@ bool randomStep(maze_t* maze)
 }
 
 // execute the algorithm
-void wilsonsAlgo(rendererProps* renderer)
+void wilsonsAlgo(rendererProps* renderer, maze_renderer* mazeRenderer)
 {
     maze_t maze = {0};
-    initializeMaze(&maze, 15, 15);
+    vec2 mazeSize = {renderer->screenSize.x / mazeRenderer->cellGridSize, renderer->screenSize.y / mazeRenderer->cellGridSize};
+    initializeMaze(&maze, mazeSize.x, mazeSize.y);
 
     printf("%i\n", (int)maze.unused.length);
     drawFill(renderer, rgb24{0, 0, 0});
-    renderMaze(renderer, &maze);
+    renderMaze(renderer, mazeRenderer, &maze);
     writeFrame(renderer);
 
     //for(int i = 0; i < 1000; i++)
@@ -899,19 +899,20 @@ void wilsonsAlgo(rendererProps* renderer)
             break;
 
         drawFill(renderer, rgb24{0, 0, 0});
-        renderMaze(renderer, &maze);
+        renderMaze(renderer, mazeRenderer, &maze);
         writeFrame(renderer);
     }
+    destroyMaze(&maze);
 }
 
-void testMazeOperations(rendererProps* renderer)
+void testMazeOperations(rendererProps* renderer, maze_renderer* mazeRenderer)
 {
     maze_t maze = {0};
     initializeMaze(&maze, 21, 20);
 
     printf("%i\n", (int)maze.unused.length);
     drawFill(renderer, rgb24{0, 0, 0});
-    renderMaze(renderer, &maze);
+    renderMaze(renderer, mazeRenderer, &maze);
     writeFrame(renderer);
 
     linked_node* node = popNodeFront(&maze.unused);
@@ -923,44 +924,44 @@ void testMazeOperations(rendererProps* renderer)
 
     printf("%i\n", (int)maze.unused.length);
     drawFill(renderer, rgb24{0, 0, 0});
-    renderMaze(renderer, &maze);
+    renderMaze(renderer, mazeRenderer, &maze);
     writeFrame(renderer);
 
     //pushNodeBack(&maze.unused, node);
     addChild(maze.mazeIncluded.root, node);
     drawFill(renderer, rgb24{0, 0, 0});
-    renderMaze(renderer, &maze);
+    renderMaze(renderer, mazeRenderer, &maze);
     writeFrame(renderer);
 
     addChild(maze.mazeIncluded.root, node2);
     drawFill(renderer, rgb24{0, 0, 0});
-    renderMaze(renderer, &maze);
+    renderMaze(renderer, mazeRenderer, &maze);
     writeFrame(renderer);
 
     addChild(maze.mazeIncluded.root, node3);
     drawFill(renderer, rgb24{0, 0, 0});
-    renderMaze(renderer, &maze);
+    renderMaze(renderer, mazeRenderer, &maze);
     writeFrame(renderer);
 
     addChild(maze.mazeIncluded.root, node4);
     drawFill(renderer, rgb24{0, 0, 0});
-    renderMaze(renderer, &maze);
+    renderMaze(renderer, mazeRenderer, &maze);
     writeFrame(renderer);
 
     addChild(node3, node5);
     drawFill(renderer, rgb24{0, 0, 0});
-    renderMaze(renderer, &maze);
+    renderMaze(renderer, mazeRenderer, &maze);
     writeFrame(renderer);
 
     addChild(node3, node6);
     drawFill(renderer, rgb24{0, 0, 0});
-    renderMaze(renderer, &maze);
+    renderMaze(renderer, mazeRenderer, &maze);
     writeFrame(renderer);
 
 
     printf("%i\n", (int)maze.unused.length);
     drawFill(renderer, rgb24{0, 0, 0});
-    renderMaze(renderer, &maze);
+    renderMaze(renderer, mazeRenderer, &maze);
     writeFrame(renderer);
 
     for(int i = 0; i < 60; i++)
@@ -978,14 +979,16 @@ int main(int argc, char** argv)
     }
 
     rendererProps renderer;
-    initializeRenderer(&renderer, 300, 300, 60, argv[1]);
+    initializeRenderer(&renderer, 1000, 1000, 60, argv[1]);
+    maze_renderer mazeRenderer = {10, 2, 0};
+    mazeRenderer.cellGridSize = mazeRenderer.cellSize + mazeRenderer.cellGridOffset * 2;
 
     //testRender(&renderer);
     //testFrameRender(&renderer);
     //testDraws(&renderer);
     //testLinkedLists();
-    //testMazeOperations(&renderer);
-    wilsonsAlgo(&renderer);
+    //testMazeOperations(&renderer, &mazeRenderer);
+    wilsonsAlgo(&renderer, &mazeRenderer);
 
     destroyRenderer(&renderer);
 
