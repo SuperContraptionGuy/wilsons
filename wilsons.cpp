@@ -332,11 +332,8 @@ void addChild(linked_node* parent, linked_node* child)
     parent->children[parent->numberOfChildren] = child;
     parent->numberOfChildren++;
     child->parent = parent;
-}
 
-void addBranchTo(linked_node* attachmentPoint, linked_node* branchRoot)
-{
-    //attachmentPoint->
+    child->listAffiliation = parent->listAffiliation;   // should we add recursively??
 }
 
 typedef struct
@@ -668,11 +665,16 @@ void initializeMaze(maze_t* maze, size_t x, size_t y)
     lrand48_r(&maze->PRNG, &nodeIndex);
     nodeIndex = nodeIndex % maze->unused.length;
     linked_node* node = getNthFrom(maze->unused.beginning, nodeIndex);
-
     removeNode(&maze->unused, node);
     maze->mazeIncluded.root = node;
     node->listAffiliation = TREE;
-    //pushNodeFront(&maze->randomWalk, node);
+
+    // choose a random cell to begin random walk from
+    lrand48_r(&maze->PRNG, &nodeIndex);
+    nodeIndex = nodeIndex % maze->unused.length;
+    node = getNthFrom(maze->unused.beginning, nodeIndex);
+    removeNode(&maze->unused, node);
+    pushNodeFront(&maze->randomWalk, node);
 }
 
 void destroyMaze(maze_t* maze)
@@ -757,15 +759,61 @@ void renderMaze(rendererProps* renderer, maze_t* maze)
     renderTree(renderer, &mazeRenderer, maze->mazeIncluded.root, rgb24{255, 255, 255}, rgb24{0, 255, 0});
 }
 
+void randomStep(maze_t* maze)
+{
+    // find random neighbor to end of random walk
+
+    // pick random step
+    long int direction;
+    vec2 step = {0};
+    lrand48_r(&maze->PRNG, &direction);
+    direction = direction % 4;
+    if(direction % 2 == 0)
+    {
+        direction -= 1;
+        step.x = direction;
+    } else
+    {
+        direction -= 2;
+        step.y = direction;
+    }
+
+    // find node step away from random walk end
+    vec2* endCoords = &maze->randomWalk.end->position;
+    vec2 nextCoords = {endCoords->x + step.x, endCoords->y + step.y};
+    nextCoords.x = nextCoords.x < 0 ? 0 : nextCoords.x > maze->size.x ? maze->size.x : nextCoords.x;
+    nextCoords.y = nextCoords.y < 0 ? 0 : nextCoords.y > maze->size.y ? maze->size.y : nextCoords.y;
+    linked_node* nextNode= maze->map[nextCoords.x][nextCoords.y];
+
+    // add that node to the random walk
+    if(nextNode->listAffiliation == UNUSED)
+        removeNode(&maze->unused, nextNode);
+    else if(nextNode->listAffiliation == TREE)
+        return; // don't do shit with em
+    else if(nextNode->listAffiliation == RANDOMWALK)
+        removeNode(&maze->randomWalk, nextNode);
+
+    pushNodeBack(&maze->randomWalk, nextNode);
+}
+
 void testMazeOperations(rendererProps* renderer)
 {
     maze_t maze = {0};
-    initializeMaze(&maze, 4, 5);
+    initializeMaze(&maze, 7, 7);
 
     printf("%i\n", (int)maze.unused.length);
     drawFill(renderer, rgb24{0, 0, 0});
     renderMaze(renderer, &maze);
     writeFrame(renderer);
+
+    for(int i = 0; i < 100; i++)
+    {
+        randomStep(&maze);
+
+        drawFill(renderer, rgb24{0, 0, 0});
+        renderMaze(renderer, &maze);
+        writeFrame(renderer);
+    }
 
     linked_node* node = popNodeFront(&maze.unused);
     linked_node* node2 = popNodeFront(&maze.unused);
@@ -820,11 +868,6 @@ void testMazeOperations(rendererProps* renderer)
     {
         writeFrame(renderer);
     }
-}
-
-void randomStep(maze_t* maze)
-{
-
 }
 
 int main(int argc, char** argv)
