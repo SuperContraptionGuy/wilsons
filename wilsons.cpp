@@ -309,6 +309,33 @@ typedef struct
     list_affiliation_t listName;
 } linked_acyclic_graph;
 
+// check if node is a descendant of root
+bool isDescendantOf(linked_node* node, linked_node* root)
+{
+    linked_node* child;
+    for(int i = 0; i < root->numberOfChildren; i++)
+    {
+        child = root->children[i];
+        if(child == node)
+            return true;
+        if(isDescendantOf(node, child))
+            return true;
+    }
+    return false;
+}
+
+void addChild(linked_node* parent, linked_node* child)
+{
+    parent->children[parent->numberOfChildren] = child;
+    parent->numberOfChildren++;
+    child->parent = parent;
+}
+
+void addBranchTo(linked_node* attachmentPoint, linked_node* branchRoot)
+{
+    //attachmentPoint->
+}
+
 typedef struct
 {
     linked_node* beginning;
@@ -630,7 +657,7 @@ void initializeMaze(maze_t* maze, size_t x, size_t y)
     }
 
     // setup prng
-    srand(1);
+    srand(2);
     srand48_r(rand(), &maze->PRNG);
 
     // choose a random cell to be initially included in the maze
@@ -640,7 +667,9 @@ void initializeMaze(maze_t* maze, size_t x, size_t y)
     linked_node* node = getNthFrom(maze->unused.beginning, nodeIndex);
 
     removeNode(&maze->unused, node);
-    pushNodeFront(&maze->unused, node);
+    maze->mazeIncluded.root = node;
+    node->listAffiliation = TREE;
+    //pushNodeFront(&maze->randomWalk, node);
 }
 
 void destroyMaze(maze_t* maze)
@@ -693,6 +722,28 @@ void renderLinkedList(rendererProps* renderer, maze_renderer* mazeRenderer, doub
     } while((node = node->next) != NULL);
 }
 
+void renderTree(rendererProps* renderer, maze_renderer* mazeRenderer, linked_node* root, rgb24 cellColor, rgb24 lineColor)
+{
+    // traverse tree
+    // recursive, so render current node, and then render each of it's children
+
+    vec2 pos = {root->position.x * mazeRenderer->cellGridSize + mazeRenderer->cellGridOffset, root->position.y * mazeRenderer->cellGridSize + mazeRenderer->cellGridOffset};
+    drawBox(renderer, pos, vec2{mazeRenderer->cellSize, mazeRenderer->cellSize}, cellColor);
+    if(root->parent)
+    {
+        drawLine(renderer,
+                add(scale(root->position, mazeRenderer->cellGridSize), mazeRenderer->cellGridOffset + mazeRenderer->cellSize / 2),
+                add(scale(root->parent->position, mazeRenderer->cellGridSize), mazeRenderer->cellGridOffset + mazeRenderer->cellSize / 2),
+                lineColor);
+    }
+    linked_node* child;
+    for(int i = 0; i < root->numberOfChildren; i++)
+    {
+        child = root->children[i];
+        renderTree(renderer, mazeRenderer, child, cellColor, lineColor);
+    }
+}
+
 void renderMaze(rendererProps* renderer, maze_t* maze)
 {
     maze_renderer mazeRenderer = {10, 2, 0};
@@ -700,9 +751,7 @@ void renderMaze(rendererProps* renderer, maze_t* maze)
 
     renderLinkedList(renderer, &mazeRenderer, &maze->unused, rgb24{50, 50, 50}, rgb24{50, 0, 0});
     renderLinkedList(renderer, &mazeRenderer, &maze->randomWalk, rgb24{30, 30, 200}, rgb24{230, 230, 230});
-
-    // need boxes
-    // need lines of thickness with end caps
+    renderTree(renderer, &mazeRenderer, maze->mazeIncluded.root, rgb24{255, 255, 255}, rgb24{0, 255, 0});
 }
 
 void testMazeOperations(rendererProps* renderer)
@@ -716,13 +765,48 @@ void testMazeOperations(rendererProps* renderer)
     writeFrame(renderer);
 
     linked_node* node = popNodeFront(&maze.unused);
+    linked_node* node2 = popNodeFront(&maze.unused);
+    linked_node* node3 = popNodeFront(&maze.unused);
+    linked_node* node4 = popNodeFront(&maze.unused);
+    linked_node* node5 = popNodeFront(&maze.unused);
+    linked_node* node6 = popNodeFront(&maze.unused);
 
     printf("%i\n", (int)maze.unused.length);
     drawFill(renderer, rgb24{0, 0, 0});
     renderMaze(renderer, &maze);
     writeFrame(renderer);
 
-    pushNodeBack(&maze.unused, node);
+    //pushNodeBack(&maze.unused, node);
+    addChild(maze.mazeIncluded.root, node);
+    drawFill(renderer, rgb24{0, 0, 0});
+    renderMaze(renderer, &maze);
+    writeFrame(renderer);
+
+    addChild(maze.mazeIncluded.root, node2);
+    drawFill(renderer, rgb24{0, 0, 0});
+    renderMaze(renderer, &maze);
+    writeFrame(renderer);
+
+    addChild(maze.mazeIncluded.root, node3);
+    drawFill(renderer, rgb24{0, 0, 0});
+    renderMaze(renderer, &maze);
+    writeFrame(renderer);
+
+    addChild(maze.mazeIncluded.root, node4);
+    drawFill(renderer, rgb24{0, 0, 0});
+    renderMaze(renderer, &maze);
+    writeFrame(renderer);
+
+    addChild(node3, node5);
+    drawFill(renderer, rgb24{0, 0, 0});
+    renderMaze(renderer, &maze);
+    writeFrame(renderer);
+
+    addChild(node3, node6);
+    drawFill(renderer, rgb24{0, 0, 0});
+    renderMaze(renderer, &maze);
+    writeFrame(renderer);
+
 
     printf("%i\n", (int)maze.unused.length);
     drawFill(renderer, rgb24{0, 0, 0});
@@ -749,15 +833,15 @@ int main(int argc, char** argv)
     }
 
     rendererProps renderer;
-    //initializeRenderer(&renderer, 100, 100, 60, argv[1]);
+    initializeRenderer(&renderer, 100, 100, 60, argv[1]);
 
     //testRender(&renderer);
     //testFrameRender(&renderer);
     //testDraws(&renderer);
-    testLinkedLists();
-    //testMazeOperations(&renderer);
+    //testLinkedLists();
+    testMazeOperations(&renderer);
 
-    //destroyRenderer(&renderer);
+    destroyRenderer(&renderer);
 
     return 0;
 }
