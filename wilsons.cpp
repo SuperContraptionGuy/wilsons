@@ -56,7 +56,7 @@ void initializeRenderer(rendererProps* renderer, int x, int y, int fps, char* fi
     renderer->frameBuffer.pixels = (rgb24*)malloc(renderer->frameBuffer.numberOfBytes);
 
     char ffmpegCommand[500] = {0};
-    char ffmpegFormatString[] = "ffmpeg -hide_banner -loglevel error -s %ix%i -f rawvideo -pix_fmt rgb24 -r %i -i pipe:0 -f nut pipe:1 | tee $(ffmpeg -f nut -i pipe:0 -pix_fmt yuv420p -profile:v high -level:v 4.1 -crf:v 20 \"%s.mp4\") | ffplay -f nut -i pipe:0";
+    char ffmpegFormatString[] = "ffmpeg -hide_banner -loglevel error -s %ix%i -f rawvideo -pix_fmt rgb24 -r %i -i pipe:0 -f nut pipe:1 | tee >(ffmpeg -f nut -i pipe:0 -pix_fmt yuv420p -profile:v high -level:v 4.1 -crf:v 20 \"%s.mp4\") | ffplay -f nut -i pipe:0";
     //char ffmpegFormatString[] = "tee log | ffmpeg -s %ix%i -f rawvideo -pix_fmt rgb24 -r %i -i pipe:0 -pix_fmt yuv420p -profile:v high -level:v 4.1 -crf:v 20 \"%s.mp4\"";
     snprintf(ffmpegCommand, 500, ffmpegFormatString, renderer->screenSize.x, renderer->screenSize.y, fps, filename);
     renderer->ffmpegStdIn = popen(ffmpegCommand, "w");
