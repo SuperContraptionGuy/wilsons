@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <math.h>
+#include <time.h>
 
 typedef struct
 {
@@ -41,14 +42,15 @@ typedef struct __attribute__((packed))
 typedef struct
 {
     vec2 screenSize;
-    FILE* ffmpegStdIn;
+    FILE* stdinPipe;
+    char* filename;
 
     rgb24_frame frameBuffer;
 
 } rendererProps;
 
 
-void initializeRenderer(rendererProps* renderer, int x, int y, int fps, char* filename)
+void initializeRenderer_ffmpeg(rendererProps* renderer, int x, int y, int fps, char* filename)
 {
     renderer->screenSize = {x, y};
     renderer->frameBuffer.numberOfPixels = renderer->screenSize.x * renderer->screenSize.y;
@@ -56,17 +58,50 @@ void initializeRenderer(rendererProps* renderer, int x, int y, int fps, char* fi
     renderer->frameBuffer.pixels = (rgb24*)malloc(renderer->frameBuffer.numberOfBytes);
 
     char ffmpegCommand[500] = {0};
-    char ffmpegFormatString[] = "ffmpeg -hide_banner -loglevel error -s %ix%i -f rawvideo -pix_fmt rgb24 -r %i -i pipe:0 -f nut pipe:1 | tee >(ffmpeg -f nut -i pipe:0 -pix_fmt yuv420p -profile:v high -level:v 4.1 -crf:v 20 \"%s.mp4\") | ffplay -f nut -i pipe:0";
+    char ffmpegFormatString[] = "ffmpeg -hide_banner -loglevel error -s %ix%i -f rawvideo -pix_fmt rgb24 -r %i -i pipe:0 -c:v copy -f nut pipe:1 | tee >(ffmpeg -hide_banner -loglevel error -f nut -i pipe:0 -pix_fmt yuv420p -profile:v high -level:v 4.1 -crf:v 20 \"%s.mp4\") | ffplay -hide_banner -loglevel error -autoexit -f nut -i pipe:0";
     //char ffmpegFormatString[] = "tee log | ffmpeg -s %ix%i -f rawvideo -pix_fmt rgb24 -r %i -i pipe:0 -pix_fmt yuv420p -profile:v high -level:v 4.1 -crf:v 20 \"%s.mp4\"";
     snprintf(ffmpegCommand, 500, ffmpegFormatString, renderer->screenSize.x, renderer->screenSize.y, fps, filename);
-    renderer->ffmpegStdIn = popen(ffmpegCommand, "w");
-
+    renderer->stdinPipe = popen(ffmpegCommand, "w");
 }
 
-void destroyRenderer(rendererProps* renderer)
+void initializeRenderer_pbm(rendererProps* renderer, int x, int y, char* filename)
+{
+    renderer->screenSize = {x, y};
+    renderer->frameBuffer.numberOfPixels = renderer->screenSize.x * renderer->screenSize.y;
+    renderer->frameBuffer.numberOfBytes = sizeof(rgb24) * renderer->frameBuffer.numberOfPixels;
+    renderer->frameBuffer.pixels = (rgb24*)malloc(renderer->frameBuffer.numberOfBytes);
+    renderer->filename = (char*)malloc(100);
+    sprintf(renderer->filename, "%s", filename);
+
+    char filenameWithExtension[100];
+    sprintf(filenameWithExtension, "%s.pbm", filename);
+    renderer->stdinPipe = fopen(filenameWithExtension, "w");
+    char header[25];
+    sprintf(header, "P6\n%d %d 255\n", x, y);
+    fprintf(renderer->stdinPipe, "%s", header);
+}
+
+void destroyRenderer_ffmpeg(rendererProps* renderer)
 {
     free(renderer->frameBuffer.pixels);
-    pclose(renderer->ffmpegStdIn);
+    pclose(renderer->stdinPipe);
+}
+
+void destroyRenderer_pbm(rendererProps* renderer)
+{
+    free(renderer->frameBuffer.pixels);
+    fclose(renderer->stdinPipe);
+
+    // convert pbm to png
+    char filename_pbm[100];
+    sprintf(filename_pbm, "%s.pbm", renderer->filename);
+    char filename_png[100];
+    sprintf(filename_png, "%s.png", renderer->filename);
+    char command_magick[200];
+    sprintf(command_magick, "magick \"%s\" \"%s\"", filename_pbm, filename_png);
+    system(command_magick);
+
+    free(renderer->filename);
 }
 
 void testRender(rendererProps* renderer)
@@ -80,7 +115,7 @@ void testRender(rendererProps* renderer)
             {
                 rgb24 pixel = {(uint8_t)(x % 256), uint8_t(y % 256), uint8_t(frame % 256)};
 
-                fwrite(&pixel, sizeof(uint8_t), 3, renderer->ffmpegStdIn);
+                fwrite(&pixel, sizeof(uint8_t), 3, renderer->stdinPipe);
 
             }
         }
@@ -89,7 +124,7 @@ void testRender(rendererProps* renderer)
 
 void writeFrame(rendererProps* renderer)
 {
-    fwrite(renderer->frameBuffer.pixels, sizeof(rgb24), renderer->screenSize.x * renderer->screenSize.y, renderer->ffmpegStdIn);
+    fwrite(renderer->frameBuffer.pixels, sizeof(rgb24), renderer->screenSize.x * renderer->screenSize.y, renderer->stdinPipe);
 }
 
 void setPixel(rgb24* pixel, uint8_t r, uint8_t g, uint8_t b)
@@ -138,7 +173,7 @@ void testFrameRender(rendererProps* renderer)
 
 void drawFill(rendererProps* renderer, rgb24 color)
 {
-    for(int y = 0; y < renderer->screenSize.x; y++)
+    for(int y = 0; y < renderer->screenSize.y; y++)
     {
         for(int x = 0; x < renderer->screenSize.x; x++)
         {
@@ -720,7 +755,8 @@ void initializeMaze(maze_t* maze, size_t x, size_t y)
     }
 
     // setup prng
-    srand(4);
+    time_t currentTime = time(NULL);
+    srand((intmax_t)currentTime);
     srand48_r(rand(), &maze->PRNG);
 
     // choose a random cell to be initially included in the maze
@@ -822,11 +858,9 @@ void renderMaze(rendererProps* renderer, maze_renderer* mazeRenderer, maze_t* ma
     renderTree(renderer, mazeRenderer, maze->mazeIncluded.root, rgb24{255, 255, 255}, rgb24{0, 255, 0});
 }
 
-// returns true when maze is done
-bool randomStep(maze_t* maze)
+// choose a random d4, and then try to go in that direction. If can't, return the original node
+linked_node* randomDirection(maze_t* maze)
 {
-    // find random neighbor to end of random walk
-
     // pick random step
     long int direction;
     vec2 step = {0};
@@ -847,7 +881,134 @@ bool randomStep(maze_t* maze)
     vec2 nextCoords = {endCoords->x + step.x, endCoords->y + step.y};
     nextCoords.x = nextCoords.x < 0 ? 0 : nextCoords.x >= maze->size.x ? maze->size.x-1 : nextCoords.x;
     nextCoords.y = nextCoords.y < 0 ? 0 : nextCoords.y >= maze->size.y ? maze->size.y-1 : nextCoords.y;
-    linked_node* nextNode= maze->map[nextCoords.x][nextCoords.y];
+    return maze->map[nextCoords.x][nextCoords.y];
+}
+
+// sample cell in a direction from random walk head, return NULL if direction isn't available
+linked_node* getNodeAtOffsetFromHead(maze_t* maze, vec2 step)
+{
+    vec2* endCoords = &maze->randomWalk.end->position;
+    vec2 nextCoords = {endCoords->x + step.x, endCoords->y + step.y};
+    // check if it's in bounds
+    if(     nextCoords.x < 0 || nextCoords.x >= maze->size.x ||
+            nextCoords.y < 0 || nextCoords.y >= maze->size.y)
+    {
+        // out of bounds
+        return NULL;
+    }
+    return maze->map[nextCoords.x][nextCoords.y];
+}
+
+linked_node* sampleDirection(maze_t* maze)
+{
+    // figure out how many directions are possible, and what their probilities should be
+    size_t numberOfDirections = 0;  // max 4
+    double normalizationFactor = 0;
+    double probabilities[4] = {0};
+    linked_node* nodes[4];
+    // search in each direction
+    vec2 step = {0};
+    linked_node* nextNode;
+    for(int i = 0; i < 4; i++)
+    {
+        int direction = i;
+        step = {0};
+        if(direction % 2 == 0)
+        {
+            direction -= 1;
+            step.x = direction;
+        } else
+        {
+            direction -= 2;
+            step.y = direction;
+        }
+
+        nextNode = getNodeAtOffsetFromHead(maze, step);
+        if(nextNode)    // if it exists (not NULL)
+        {
+            double probability;
+            switch(nextNode->listAffiliation)
+            {
+                case UNUSED:
+                    {
+                        probability = 1;
+                        break;
+                    }
+                case RANDOMWALK:
+                    {
+                        probability = 1;
+                        break;
+                    }
+                case TREE:
+                    {
+                        probability = 1;
+                        break;
+                    }
+                default:
+                    {
+                        probability = 0;
+                        break;
+                    }
+            }
+            // direction preference
+            if(step.x)
+            {
+                //probability *= 4;
+            }
+
+            if(maze->randomWalk.end->previous)
+            {
+                linked_node* walkHead = maze->randomWalk.end;
+                if(((nextNode->position.x == walkHead->position.x && nextNode->position.x == walkHead->previous->position.x)  ||
+                    (nextNode->position.y == walkHead->position.y && nextNode->position.y == walkHead->previous->position.y)) &&
+                    nextNode != walkHead->previous &&
+                    nextNode->listAffiliation == UNUSED)
+                {
+                    // prefer linear motion
+                    //probability *= 0.01;
+                }
+
+            }
+            
+
+            probabilities[numberOfDirections] = probability;
+            normalizationFactor += probability;
+            nodes[numberOfDirections] = nextNode;
+            numberOfDirections++;
+        }
+    }
+
+    // if theres no viable direction, return the head
+    if(numberOfDirections == 0 || normalizationFactor == 0)
+        return maze->randomWalk.end;    // no where to go, stay in place
+
+    // normalize probabilities so they sum to 1
+    for(int i = 0; i < numberOfDirections; i++)
+        probabilities[i] /= normalizationFactor;
+
+    // now pick a random float between 0 and 1
+    double randomNumber;
+    drand48_r(&maze->PRNG, &randomNumber);
+
+    // subtract probabilites until 0 is crossed
+    int directionIndex = 0;
+    while(directionIndex < 4)
+    {
+        randomNumber -= probabilities[directionIndex];
+        if(randomNumber <= 0)
+            break;
+        directionIndex++;
+    }
+    // directionIndex is the chosen direction
+    return nodes[directionIndex];
+}
+
+// returns true when maze is done
+bool stepMazeWilson(maze_t* maze)
+{
+    // find random neighbor to end of random walk
+    //linked_node* nextNode = randomDirection(maze);
+    linked_node* nextNode = sampleDirection(maze);
 
     // add that node to the random walk
     if(nextNode->listAffiliation == UNUSED)
@@ -881,28 +1042,26 @@ bool randomStep(maze_t* maze)
 }
 
 // execute the algorithm
-void wilsonsAlgo(rendererProps* renderer, maze_renderer* mazeRenderer)
+void wilsonsAlgo(rendererProps* renderer, maze_renderer* mazeRenderer, maze_t* maze)
 {
-    maze_t maze = {0};
-    vec2 mazeSize = {renderer->screenSize.x / mazeRenderer->cellGridSize, renderer->screenSize.y / mazeRenderer->cellGridSize};
-    initializeMaze(&maze, mazeSize.x, mazeSize.y);
-
-    printf("%i\n", (int)maze.unused.length);
     drawFill(renderer, rgb24{0, 0, 0});
-    renderMaze(renderer, mazeRenderer, &maze);
+    renderMaze(renderer, mazeRenderer, maze);
     writeFrame(renderer);
 
     //for(int i = 0; i < 1000; i++)
     for(;;)
     {
-        if(randomStep(&maze))
+        if(stepMazeWilson(maze))
             break;
 
         drawFill(renderer, rgb24{0, 0, 0});
-        renderMaze(renderer, mazeRenderer, &maze);
+        renderMaze(renderer, mazeRenderer, maze);
         writeFrame(renderer);
     }
-    destroyMaze(&maze);
+    drawFill(renderer, rgb24{0, 0, 0});
+    renderMaze(renderer, mazeRenderer, maze);
+    writeFrame(renderer);
+
 }
 
 void testMazeOperations(rendererProps* renderer, maze_renderer* mazeRenderer)
@@ -978,19 +1137,37 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    rendererProps renderer;
-    initializeRenderer(&renderer, 1000, 1000, 60, argv[1]);
+
     maze_renderer mazeRenderer = {10, 2, 0};
     mazeRenderer.cellGridSize = mazeRenderer.cellSize + mazeRenderer.cellGridOffset * 2;
+
+    vec2 mazeSize = {30, 20};
+    //vec2 mazeSize = {renderer.screenSize.x / mazeRenderer.cellGridSize, renderer.screenSize.y / mazeRenderer.cellGridSize};
+    vec2 screenSize = {mazeSize.x * mazeRenderer.cellGridSize, mazeSize.y * mazeRenderer.cellGridSize};
+
+    rendererProps renderer_ffmpeg;
+    initializeRenderer_ffmpeg(&renderer_ffmpeg, screenSize.x, screenSize.y, 60, argv[1]);
+
+    maze_t maze = {0};
+    initializeMaze(&maze, mazeSize.x, mazeSize.y);
 
     //testRender(&renderer);
     //testFrameRender(&renderer);
     //testDraws(&renderer);
     //testLinkedLists();
     //testMazeOperations(&renderer, &mazeRenderer);
-    wilsonsAlgo(&renderer, &mazeRenderer);
+    wilsonsAlgo(&renderer_ffmpeg, &mazeRenderer, &maze);
 
-    destroyRenderer(&renderer);
+    // render out an image of the maze
+    rendererProps renderer_pbm;
+    initializeRenderer_pbm(&renderer_pbm, screenSize.x, screenSize.y, argv[1]);
+    drawFill(&renderer_pbm, rgb24{0, 0, 0});
+    renderMaze(&renderer_pbm, &mazeRenderer, &maze);
+    writeFrame(&renderer_pbm);
+    destroyRenderer_pbm(&renderer_pbm);
+
+    destroyMaze(&maze);
+    destroyRenderer_ffmpeg(&renderer_ffmpeg);
 
     return 0;
 }
