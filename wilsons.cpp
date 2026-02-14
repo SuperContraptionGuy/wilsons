@@ -926,6 +926,7 @@ linked_node* sampleDirection(maze_t* maze)
         nextNode = getNodeAtOffsetFromHead(maze, step);
         if(nextNode)    // if it exists (not NULL)
         {
+            // determine probabilites for sampling algo
             double probability;
             switch(nextNode->listAffiliation)
             {
@@ -956,6 +957,7 @@ linked_node* sampleDirection(maze_t* maze)
                 //probability *= 4;
             }
 
+            // linear vs convoluted preference
             if(maze->randomWalk.end->previous)
             {
                 linked_node* walkHead = maze->randomWalk.end;
@@ -964,13 +966,13 @@ linked_node* sampleDirection(maze_t* maze)
                     nextNode != walkHead->previous &&
                     nextNode->listAffiliation == UNUSED)
                 {
-                    // prefer linear motion
+                    // prefer/disprefer linear motion
                     //probability *= 0.01;
                 }
 
             }
             
-
+            // add probability and node to lists
             probabilities[numberOfDirections] = probability;
             normalizationFactor += probability;
             nodes[numberOfDirections] = nextNode;
