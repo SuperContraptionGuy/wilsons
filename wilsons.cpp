@@ -1143,7 +1143,7 @@ int main(int argc, char** argv)
     maze_renderer mazeRenderer = {10, 2, 0};
     mazeRenderer.cellGridSize = mazeRenderer.cellSize + mazeRenderer.cellGridOffset * 2;
 
-    vec2 mazeSize = {30, 20};
+    vec2 mazeSize = {100, 100};
     //vec2 mazeSize = {renderer.screenSize.x / mazeRenderer.cellGridSize, renderer.screenSize.y / mazeRenderer.cellGridSize};
     vec2 screenSize = {mazeSize.x * mazeRenderer.cellGridSize, mazeSize.y * mazeRenderer.cellGridSize};
 
